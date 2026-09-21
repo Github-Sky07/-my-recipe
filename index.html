@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>我的菜谱</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;background:#f7f7f7;color:#111}
+header{position:sticky;top:0;background:#fff;padding:18px 16px 12px;z-index:2;border-bottom:1px solid #eee}
+h1{font-size:30px;margin:0 0 12px}.search{width:100%;padding:12px 14px;border:0;border-radius:12px;background:#f0f0f2;font-size:16px}
+main{padding:14px 14px 90px}.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px #0000000d}
+.card h2{margin:0 0 7px;font-size:19px}.muted{color:#777;font-size:13px}.fab{position:fixed;right:20px;bottom:25px;width:58px;height:58px;border:0;border-radius:50%;background:#111;color:#fff;font-size:30px;box-shadow:0 5px 20px #0003}
+.empty{text-align:center;color:#777;padding:70px 20px}.modal{position:fixed;inset:0;background:#fff;z-index:5;display:none;overflow:auto}.modal.show{display:block}.bar{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff}.bar button{border:0;background:none;font-size:17px}.save{font-weight:600}.form{padding:18px}.form label{display:block;font-weight:600;margin:16px 0 7px}.form input,.form textarea{width:100%;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:16px;font-family:inherit;background:#fff}.form textarea{min-height:120px;resize:vertical}.detail{padding:20px}.detail h2{font-size:28px}.section{margin:24px 0}.section h3{font-size:18px}.section p{white-space:pre-wrap;line-height:1.7}.danger{color:#d00}
+</style>
+</head>
+<body>
+<header><h1>我的菜谱</h1><input id="search" class="search" placeholder="搜索菜谱"></header>
+<main id="list"></main>
+<button class="fab" onclick="openEditor()">＋</button>
+
+<div id="editor" class="modal">
+ <div class="bar"><button onclick="closeEditor()">取消</button><strong>新建菜谱</strong><button class="save" onclick="saveRecipe()">保存</button></div>
+ <div class="form">
+  <label>菜名</label><input id="name" placeholder="例如：番茄炒蛋">
+  <label>食材</label><textarea id="ingredients" placeholder="番茄 2个&#10;鸡蛋 3个&#10;盐 2g"></textarea>
+  <label>我的做法</label><textarea id="steps" placeholder="1. 鸡蛋打散...&#10;2. 番茄切块..."></textarea>
+  <label>我的备注</label><textarea id="notes" placeholder="下次可以少放一点盐……"></textarea>
+ </div>
+</div>
+
+<div id="detail" class="modal">
+ <div class="bar"><button onclick="closeDetail()">返回</button><strong>菜谱</strong><button onclick="editCurrent()">编辑</button></div>
+ <div id="detailBody" class="detail"></div>
+</div>
+
+<script>
+let recipes=JSON.parse(localStorage.getItem('myRecipes')||'[]'), editing=null,current=null;
+const $=id=>document.getElementById(id);
+function persist(){localStorage.setItem('myRecipes',JSON.stringify(recipes))}
+function render(){
+ const q=$('search').value.trim().toLowerCase();
+ const arr=recipes.filter(r=>r.name.toLowerCase().includes(q));
+ $('list').innerHTML=arr.length?arr.map(r=>`<div class="card" onclick="openDetail('${r.id}')"><h2>${esc(r.name)}</h2><div class="muted">${new Date(r.updated).toLocaleDateString('zh-CN')}</div>${r.ingredients?`<div class="muted" style="margin-top:7px">${esc(r.ingredients.split('\n').slice(0,2).join(' · '))}</div>`:''}</div>`).join(''):`<div class="empty">🍳<br><br>${q?'没有找到菜谱':'还没有菜谱'}<br><br>点击右下角 ＋ 添加第一道菜</div>`;
+}
+function openEditor(r=null){
+ editing=r?r.id:null;$('name').value=r?.name||'';$('ingredients').value=r?.ingredients||'';$('steps').value=r?.steps||'';$('notes').value=r?.notes||'';$('editor').classList.add('show');
+}
+function closeEditor(){$('editor').classList.remove('show')}
+function saveRecipe(){
+ const name=$('name').value.trim(); if(!name){alert('请先填写菜名');return}
+ const data={name,ingredients:$('ingredients').value,steps:$('steps').value,notes:$('notes').value,updated:new Date().toISOString()};
+ if(editing){const i=recipes.findIndex(r=>r.id===editing);recipes[i]={...recipes[i],...data}}else{recipes.unshift({id:Date.now().toString(),...data})}
+ persist();closeEditor();render();
+}
+function openDetail(id){
+ current=recipes.find(r=>r.id===id); if(!current)return;
+ $('detailBody').innerHTML=`<h2>${esc(current.name)}</h2>${sec('食材',current.ingredients)}${sec('我的做法',current.steps)}${sec('我的备注',current.notes)}<button class="danger" onclick="deleteCurrent()" style="border:0;background:none;padding:8px 0;font-size:16px">删除这道菜</button>`;
+ $('detail').classList.add('show');
+}
+function sec(t,v){return v?`<div class="section"><h3>${t}</h3><p>${esc(v)}</p></div>`:''}
+function closeDetail(){$('detail').classList.remove('show')}
+function editCurrent(){closeDetail();openEditor(current)}
+function deleteCurrent(){if(confirm('确定删除这道菜吗？')){recipes=recipes.filter(r=>r.id!==current.id);persist();closeDetail();render()}}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('search').addEventListener('input',render);render();
+</script>
+</body>
+</html>
